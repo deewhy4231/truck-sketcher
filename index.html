@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Truck Sketcher Pro</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #header {
+            padding: 10px;
+            background-color: #2c2c2c;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        #main-container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        #view3d-container {
+            width: 100%;
+            height: 45%;
+            position: relative;
+            background: radial-gradient(circle, #3a3a3a 0%, #151515 100%);
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 55%;
+            background-color: #252525;
+            display: flex;
+            flex-direction: column;
+            border-top: 3px solid #444;
+        }
+
+        #toolbar {
+            display: flex;
+            padding: 10px;
+            background-color: #1e1e1e;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            border-bottom: 1px solid #333;
+        }
+
+        .tab-btn {
+            background-color: #3a3a3a;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .tab-btn.active {
+            background-color: #007acc;
+            box-shadow: 0 0 8px rgba(0,122,204,0.6);
+        }
+
+        .tab-btn:hover {
+            background-color: #4a4a4a;
+        }
+        .tab-btn.active:hover {
+            background-color: #0062a3;
+        }
+
+        .action-btn {
+            background-color: #d9534f;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .action-btn:hover {
+            background-color: #c9302c;
+        }
+
+        .sync-option {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background-color: #2d2d2d;
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: 1px solid #444;
+            font-size: 0.9rem;
+        }
+
+        .sync-option input {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
+
+        #workspace {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            background-color: #1e1e1e;
+            padding: 10px;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            background-color: white;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            border-radius: 4px;
+            display: none;
+        }
+
+        .canvas-wrapper.active {
+            display: block;
+        }
+
+        canvas.sketchCanvas {
+            border: 1px solid #ccc;
+            cursor: crosshair;
+            display: block;
+        }
+
+        .info-overlay {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            pointer-events: none;
+            color: #ddd;
+        }
+    </style>
+    <!-- Include Three.js for 3D graphics rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="header">🚚 3D 탑차 스케치 설계 프로그램</div>
+
+    <div id="main-container">
+        <!-- Top 3D Viewport -->
+        <div id="view3d-container">
+            <div class="info-overlay">💡 마우스 드래그: 3D 트럭 회전 조작 (위에서 내려다보는 시점 고정)</div>
+        </div>
+
+        <!-- Bottom Drawing Studio -->
+        <div id="canvas-container">
+            <div id="toolbar">
+                <button class="tab-btn active" onclick="switchView('left')">좌측면도</button>
+                <button class="tab-btn" onclick="switchView('right')">우측면도</button>
+                <button class="tab-btn" onclick="switchView('front')">정면도</button>
+                <button class="tab-btn" onclick="switchView('back')">후면도</button>
+                <button class="tab-btn" onclick="switchView('top')">평면도</button>
+                
+                <div class="sync-option">
+                    <input type="checkbox" id="syncCheck" checked>
+                    <label for="syncCheck" style="cursor: pointer; user-select: none; color: #5cb85c; font-weight: bold;">
+                        🔗 좌측면 ↔ 우측면 실시간 대칭 동기화
+                    </label>
+                </div>
+
+                <button class="action-btn" onclick="clearCurrentCanvas()">현재 면 초기화</button>
+            </div>
+
+            <div id="workspace">
+                <!-- Left View Canvas -->
+                <div class="canvas-wrapper active" id="wrapper-left">
+                    <canvas id="canvas-left" class="sketchCanvas" width="600" height="300"></canvas>
+                </div>
+                <!-- Right View Canvas -->
+                <div class="canvas-wrapper" id="wrapper-right">
+                    <canvas id="canvas-right" class="sketchCanvas" width="600" height="300"></canvas>
+                </div>
+                <!-- Front View Canvas -->
+                <div class="canvas-wrapper" id="wrapper-front">
+                    <canvas id="canvas-front" class="sketchCanvas" width="400" height="300"></canvas>
+                </div>
+                <!-- Back View Canvas -->
+                <div class="canvas-wrapper" id="wrapper-back">
+                    <canvas id="canvas-back" class="sketchCanvas" width="400" height="300"></canvas>
+                </div>
+                <!-- Top View Canvas -->
+                <div class="canvas-wrapper" id="wrapper-top">
+                    <canvas id="canvas-top" class="sketchCanvas" width="600" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. Global App Configuration & State ---
+        let currentView = 'left';
+        const views = ['left', 'right', 'front', 'back', 'top'];
+        const canvases = {};
+        const contexts = {};
+        const textures = {};
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        // --- 2. 3D WebGL Graphic Setup (Three.js) ---
+        const container = document.getElementById('view3d-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x181818);
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+        
+        // Setup initial High-Angle top-down viewpoint as requested
+        let theta = Math.PI / 4; // Horizontal rotation angle
+        let phi = Math.PI / 3;   // Vertical angle looking firmly downwards
+        const radius = 9;
+
+        function updateCameraPosition() {
+            camera.position.x = radius * Math.sin(phi) * Math.sin(theta);
+            camera.position.y = radius * Math.cos(phi);
+            camera.position.z = radius * Math.sin(phi) * Math.cos(theta);
+            camera.lookAt(0, 0.2, 0);
+        }
+        updateCameraPosition();
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        // Lighting System
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.5);
+        dirLight1.position.set(5, 10, 7);
+        scene.add(dirLight1);
+
+        const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
+        dirLight2.position.set(-5, 5, -7);
+        scene.add(dirLight2);
+
+        // --- 3. Custom Truck Blueprint 2D Canvas Initialization ---
+        views.forEach(v => {
+            const cvs = document.getElementById(`canvas-${v}`);
+            canvases[v] = cvs;
+            contexts[v] = cvs.getContext('2d');
+            
+            // Build explicit Three.js textures tied to 2D UI canvases
+            textures[v] = new THREE.CanvasTexture(cvs);
+            textures[v].minFilter = THREE.LinearFilter;
+            
+            initCanvasBackground(v);
+        });
+
+        // Procedurally render structural orthographic guides to assist drawing
+        function initCanvasBackground(view) {
+            const ctx = contexts[view];
+            const w = canvases[view].width;
+            const h = canvases[view].height;
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#bbbbbb';
+            ctx.setLineDash([6, 4]);
+
+            if (view === 'left') {
+                // Cabin profile with the explicitly requested windshield slope
+                ctx.beginPath();
+                ctx.moveTo(50, 220);
+                ctx.lineTo(50, 140);
+                ctx.lineTo(130, 80);  // Sloped windshield structure
+                ctx.lineTo(200, 80);
+                ctx.lineTo(200, 220);
+                ctx.closePath();
+                ctx.stroke();
+
+                // Cargo Box profile
+                ctx.beginPath();
+                ctx.rect(210, 50, 340, 170);
+                ctx.stroke();
+            } 
+            else if (view === 'right') {
+                // Mirror flipped profile alignment for right view layout
+                ctx.beginPath();
+                ctx.rect(50, 50, 340, 170);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(400, 220);
+                ctx.lineTo(400, 80);
+                ctx.lineTo(470, 80);
+                ctx.lineTo(550, 140); // Sloped windshield structure
+                ctx.lineTo(550, 220);
+                ctx.closePath();
+                ctx.stroke();
+            } 
+            else if (view === 'front') {
+                // Cabin front windshield profile
+                ctx.beginPath();
+                ctx.rect(80, 80, 240, 140);
+                ctx.stroke();
+                // Higher Cargo Box peaking behind the cabin roof layout
+                ctx.beginPath();
+                ctx.rect(70, 50, 260, 30);
+                ctx.stroke();
+            } 
+            else if (view === 'back') {
+                // Flat rear container doors profile
+                ctx.beginPath();
+                ctx.rect(70, 50, 260, 170);
+                ctx.stroke();
+            } 
+            else if (view === 'top') {
+                // Overhead view layout: Cabin Hood, Roof and Cargo Container Top
+                ctx.beginPath();
+                ctx.rect(50, 70, 70, 160);  // Sloped Hood area
+                ctx.rect(120, 70, 80, 160); // Cabin Roof
+                ctx.rect(210, 50, 340, 200); // Cargo Box Top
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+        }
+
+        // --- 4. 3D Geometric Modelling (Assembled without Wheels) ---
+        const truckGroup = new THREE.Group();
+        scene.add(truckGroup);
+
+        // Core Materials sharing reactive 2D canvas instances directly
+        const boxMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+        const cabinMaterial = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.4 });
+        const darkMetal = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.5 });
+
+        // 4a. Building Rear Cargo Container Box
+        const boxGeo = new THREE.BoxGeometry(3.4, 1.7, 2.0);
+        
+        // Isolate specific faces of the box to accurately map relevant 2D canvas textures
+        const boxMaterials = [
+            new THREE.MeshStandardMaterial({ map: textures['back'] }),                       // +X: Back Door view
+            new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 }),             // -X: Hidden interior facing cabin
+            new THREE.MeshStandardMaterial({ map: textures['top'] }),                        // +Y: Top Roof view
+            new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.6 }),             // -Y: Underside
+            new THREE.MeshStandardMaterial({ map: textures['left'] }),                       // +Z: Left Side view
+            new THREE.MeshStandardMaterial({ map: textures['right'] })                       // -Z: Right Side view
+        ];
+
+        // Specific UV transformation to correctly align and extract sections from 2D master canvas
+        const boxMesh = new THREE.Mesh(boxGeo, boxMaterials);
+        boxMesh.position.set(0.65, 0.85, 0);
+        truckGroup.add(boxMesh);
+
+        // Custom UV Mapping logic to crop canvas zones exactly onto 3D components without distortions
+        function applyBoxUVs(geometry) {
+            const uvs = geometry.attributes.uv.array;
+            // Face index orders for custom BoxGeometry assignments (+X, -X, +Y, -Y, +Z, -Z)
+            // Left view (+Z face) maps to right section of left canvas
+            uvs[32] = 210/600; uvs[33] = 50/300;
+            uvs[34] = 210/600; uvs[35] = 220/300;
+            uvs[36] = 550/600; uvs[37] = 50/300;
+            uvs[38] = 550/600; uvs[39] = 220/300;
+            
+            // Right view (-Z face) maps to left section of right canvas
+            uvs[40] = 390/600; uvs[41] = 50/300;
+            uvs[42] = 390/600; uvs[43] = 220/300;
+            uvs[44] = 50/600;  uvs[45] = 50/300;
+            uvs[46] = 50/600;  uvs[47] = 220/300;
+
+            // Top view (+Y face) maps to right box region of top canvas
+            uvs[16] = 210/600; uvs[17] = 50/300;
+            uvs[18] = 210/600; uvs[19] = 250/300;
+            uvs[20] = 550/600; uvs[21] = 50/300;
+            uvs[22] = 550/600; uvs[23] = 250/300;
+
+            // Rear door view (+X face) maps full back canvas
+            uvs[0]  = 70/400;  uvs[1]  = 50/300;
+            uvs[2]  = 70/400;  uvs[3]  = 220/300;
+            uvs[4]  = 330/400; uvs[5]  = 50/300;
+            uvs[6]  = 330/400; uvs[7]  = 220/300;
+
+            geometry.attributes.uv.needsUpdate = true;
+        }
+        applyBoxUVs(boxGeo);
+
+        // 4b. Building Drivers Cabin with Realistic Sloped Front Window Geometry
+        const cabinShape = new THREE.Shape();
+        cabinShape.moveTo(-1.0, 0);
+        cabinShape.lineTo(-1.0, 0.9);
+        cabinShape.lineTo(-0.5, 1.4); // Angled windshield point setup
+        cabinShape.lineTo(0.4, 1.4);
+        cabinShape.lineTo(0.4, 0);
+        cabinShape.lineTo(-1.0, 0);
+
+        const extrudeSettings = { depth: 1.8, bevelEnabled: false };
+        const cabinGeo = new THREE.ExtrudeGeometry(cabinShape, extrudeSettings);
+        cabinGeo.center();
+
+        const cabinMaterials = [
+            new THREE.MeshStandardMaterial({ map: textures['left'] }),   // Extruded profile side (Left)
+            new THREE.MeshStandardMaterial({ map: textures['right'] }),  // Extruded profile side (Right)
+        ];
+
+        // Multi-material skinning to distribute unique UI views across complex vehicle body faces
+        const cabinMesh = new THREE.Mesh(cabinGeo, [
+            new THREE.MeshStandardMaterial({ color: 0xeeeeee }), // Front wrap/slopes handled generically or tinted
+            new THREE.MeshStandardMaterial({ map: textures['front'] }) // Front view face assignment
+        ]);
+        
+        // Assemble subcomponents cleanly
+        const cabinSubGroup = new THREE.Group();
+        
+        // Independent side panels to cleanly map flat drawings onto complex extruded geometry bounds
+        const sideLeftGeo = new THREE.BufferGeometry();
+        const verticesLeft = new Float32Array([
+            -1.0, 0, 0.9,   -1.0, 0.9, 0.9,   -0.5, 1.4, 0.9,
+            -1.0, 0, 0.9,   -0.5, 1.4, 0.9,    0.4, 1.4, 0.9,
+            -1.0, 0, 0.9,    0.4, 1.4, 0.9,    0.4, 0,   0.9
+        ]);
+        const uvsLeft = new Float32Array([
+            50/600, 220/300,  50/600, 140/300,  130/600, 80/300,
+            50/600, 220/300,  130/600, 80/300,  200/600, 80/300,
+            50/600, 220/300,  200/600, 80/300,  200/600, 220/300
+        ]);
+        sideLeftGeo.setAttribute('position', new THREE.BufferAttribute(verticesLeft, 3));
+        sideLeftGeo.setAttribute('uv', new THREE.BufferAttribute(uvsLeft, 2));
+        sideLeftGeo.computeVertexNormals();
+        const sideLeftMesh = new THREE.Mesh(sideLeftGeo, new THREE.MeshStandardMaterial({ map: textures['left'], side: THREE.DoubleSide }));
+        cabinSubGroup.add(sideLeftMesh);
+
+        const sideRightGeo = new THREE.BufferGeometry();
+        const verticesRight = new Float32Array([
+            -1.0, 0, -0.9,   -1.0, 0.9, -0.9,   -0.5, 1.4, -0.9,
+            -1.0, 0, -0.9,   -0.5, 1.4, -0.9,    0.4, 1.4, -0.9,
+            -1.0, 0, -0.9,    0.4, 1.4, -0.9,    0.4, 0,   -0.9
+        ]);
+        // Flipped UV coordinates to perfectly display right canvas layout across opposite side profile
+        const uvsRight = new Float32Array([
+            550/600, 220/300,  550/600, 140/300,  470/600, 80/300,
+            550/600, 220/300,  470/600, 80/300,  400/600, 80/300,
+            550/600, 220/300,  400/600, 80/300,  400/600, 220/300
+        ]);
+        sideRightGeo.setAttribute('position', new THREE.BufferAttribute(verticesRight, 3));
+        sideRightGeo.setAttribute('uv', new THREE.BufferAttribute(uvsRight, 2));
+        sideRightGeo.computeVertexNormals();
+        const sideRightMesh = new THREE.Mesh(sideRightGeo, new THREE.MeshStandardMaterial({ map: textures['right'], side: THREE.DoubleSide }));
+        cabinSubGroup.add(sideRightMesh);
+
+        // Core central block of cabin structure
+        const coreCabinGeo = new THREE.BoxGeometry(1.4, 1.4, 1.78);
+        const coreCabinMaterials = [
+            new THREE.MeshStandardMaterial({ color: 0xeeeeee }), 
+            new THREE.MeshStandardMaterial({ color: 0xeeeeee }), 
+            new THREE.MeshStandardMaterial({ map: textures['top'] }),  // Top flat roof segment
+            new THREE.MeshStandardMaterial({ color: 0x222222 }), 
+            new THREE.MeshStandardMaterial({ color: 0xeeeeee }), 
+            new THREE.MeshStandardMaterial({ color: 0xeeeeee })
+        ];
+        const coreCabinMesh = new THREE.Mesh(coreCabinGeo, coreCabinMaterials);
+        coreCabinMesh.position.set(-0.3, 0.7, 0);
+        
+        // Map top canvas cabin segment onto physical roof mesh
+        const coreCabinUVs = coreCabinGeo.attributes.uv.array;
+        coreCabinUVs[16] = 120/600; coreCabinUVs[17] = 70/300;
+        coreCabinUVs[18] = 120/600; coreCabinUVs[19] = 230/300;
+        coreCabinUVs[20] = 200/600; coreCabinUVs[21] = 70/300;
+        coreCabinUVs[22] = 200/600; coreCabinUVs[23] = 230/300;
+        coreCabinGeo.attributes.uv.needsUpdate = true;
+        cabinSubGroup.add(coreCabinMesh);
+
+        // Front face windshield display plate mapping front view canvas
+        const frontPlateGeo = new THREE.PlaneGeometry(1.78, 1.4);
+        const frontPlateUVs = frontPlateGeo.attributes.uv.array;
+        frontPlateUVs[0] = 80/400;  frontPlateUVs[1] = 80/300;
+        frontPlateUVs[2] = 320/400; frontPlateUVs[3] = 80/300;
+        frontPlateUVs[4] = 80/400;  frontPlateUVs[5] = 220/300;
+        frontPlateUVs[6] = 320/400; frontPlateUVs[7] = 220/300;
+        frontPlateGeo.attributes.uv.needsUpdate = true;
+        
+        const frontPlateMesh = new THREE.Mesh(frontPlateGeo, new THREE.MeshStandardMaterial({ map: textures['front'], side: THREE.DoubleSide }));
+        frontPlateMesh.position.set(-1.0, 0.7, 0);
+        frontPlateMesh.rotation.y = -Math.PI / 2;
+        cabinSubGroup.add(frontPlateMesh);
+
+        cabinSubGroup.position.set(-1.05, 0, 0);
+        truckGroup.add(cabinSubGroup);
+
+        // Structural Underbody Lower Frame Chassis 
+        const chassisGeo = new THREE.BoxGeometry(5.0, 0.15, 1.6);
+        const chassisMesh = new THREE.Mesh(chassisGeo, darkMetal);
+        chassisMesh.position.set(-0.15, 0.05, 0);
+        truckGroup.add(chassisMesh);
+
+        // Center entire vehicle group inside viewport space
+        truckGroup.position.set(0, -0.4, 0);
+
+        // --- 5. Interactive Inter-Canvas Realtime Synchronized Drawing System ---
+        function switchView(viewName) {
+            currentView = viewName;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.canvas-wrapper').forEach(wrap => wrap.classList.remove('active'));
+
+            event.target.classList.add('active');
+            document.getElementById(`wrapper-${viewName}`).classList.add('active');
+        }
+
+        function clearCurrentCanvas() {
+            initCanvasBackground(currentView);
+            textures[currentView].needsUpdate = true;
+
+            // Proactively wipe linked symmetric canvas if cross-view mirroring option is active
+            const syncChecked = document.getElementById('syncCheck').checked;
+            if (syncChecked && (currentView === 'left' || currentView === 'right')) {
+                const partner = currentView === 'left' ? 'right' : 'left';
+                initCanvasBackground(partner);
+                textures[partner].needsUpdate = true;
+            }
+        }
+
+        // Setup draw event handlers dynamically for every operational interface workspace
+        views.forEach(v => {
+            const cvs = canvases[v];
+            const ctx = contexts[v];
+
+            cvs.addEventListener('mousedown', (e) => {
+                isDrawing = true;
+                const rect = cvs.getBoundingClientRect();
+                lastX = e.clientX - rect.left;
+                lastY = e.clientY - rect.top;
+            });
+
+            cvs.addEventListener('mousemove', (e) => {
+                if (!isDrawing) return;
+                const rect = cvs.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                // Fire synced draw command package routing coordinate metrics
+                drawStroke(v, lastX, lastY, x, y, true);
+
+                lastX = x;
+                lastY = y;
+            });
+
+            window.addEventListener('mouseup', () => {
+                isDrawing = false;
+            });
+            
+            // Mobile Device Touch Compatibility Layers
+            cvs.addEventListener('touchstart', (e) => {
+                isDrawing = true;
+                const rect = cvs.getBoundingClientRect();
+                const touch = e.touches[0];
+                lastX = touch.clientX - rect.left;
+                lastY = touch.clientY - rect.top;
+                e.preventDefault();
+            });
+
+            cvs.addEventListener('touchmove', (e) => {
+                if (!isDrawing) return;
+                const rect = cvs.getBoundingClientRect();
+                const touch = e.touches[0];
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+
+                drawStroke(v, lastX, lastY, x, y, true);
+
+                lastX = x;
+                lastY = y;
+                e.preventDefault();
+            });
+        });
+
+        // Main Rendering Stroke Engine supporting programmatic X-Axis Mirroring Synchronization
+        function drawStroke(view, x1, y1, x2, y2, allowSync = true) {
+            const ctx = contexts[view];
+            
+            ctx.strokeStyle = '#0055ff'; // Primary Blueprint Blue Ink Line
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+            
+            textures[view].needsUpdate = true;
+
+            // Mirror synchronization logic if enabled (Maps Left <-> Right symmetrically)
+            const syncChecked = document.getElementById('syncCheck').checked;
+            if (allowSync && syncChecked && (view === 'left' || view === 'right')) {
+                const partnerView = (view === 'left') ? 'right' : 'left';
+                const canvasWidth = canvases[view].width;
+
+                // Invert coordinates on the X axis to replicate spatial mirror symmetry across panels
+                const mirrorX1 = canvasWidth - x1;
+                const mirrorX2 = canvasWidth - x2;
+
+                drawStroke(partnerView, mirrorX1, y1, mirrorX2, y2, false);
+            }
+        }
+
+        // --- 6. Interlocking Orbit-Style Viewport Drag Interaction Controls ---
+        let is3DDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+
+        container.addEventListener('mousedown', (e) => {
+            is3DDragging = true;
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!is3DDragging) return;
+
+            const deltaMove = {
+                x: e.clientX - previousMousePosition.x,
+                y: e.clientY - previousMousePosition.y
+            };
+
+            // Rotational Sensitivity Weights
+            theta -= deltaMove.x * 0.007;
+            phi -= deltaMove.y * 0.007;
+
+            // Strictly lock vertical angle constraints to prevent vehicle from flipping upside down
+            phi = Math.max(0.1, Math.min(Math.PI / 2 - 0.05, phi)); // High angle downward locked limit
+
+            updateCameraPosition();
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+
+        window.addEventListener('mouseup', () => {
+            is3DDragging = false;
+        });
+        
+        // Mobile Viewport Touch Control Maps
+        container.addEventListener('touchstart', (e) => {
+            is3DDragging = true;
+            const touch = e.touches[0];
+            previousMousePosition = { x: touch.clientX, y: touch.clientY };
+        });
+
+        container.addEventListener('touchmove', (e) => {
+            if (!is3DDragging) return;
+            const touch = e.touches[0];
+            const deltaMove = {
+                x: touch.clientX - previousMousePosition.x,
+                y: touch.clientY - previousMousePosition.y
+            };
+
+            theta -= deltaMove.x * 0.007;
+            phi -= deltaMove.y * 0.007;
+            phi = Math.max(0.1, Math.min(Math.PI / 2 - 0.05, phi));
+
+            updateCameraPosition();
+            previousMousePosition = { x: touch.clientX, y: touch.clientY };
+        });
+
+        // --- 7. Realtime Graphic Loop Animation Control ---
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        // Dynamically adjust WebGL viewport context tracking dynamic browser window adjustments
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        // Boot Application Core
+        animate();
+        window.switchView = switchView;
+        window.clearCurrentCanvas = clearCurrentCanvas;
+    </script>
+</body>
+</html>
